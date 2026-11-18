@@ -2,6 +2,17 @@
 
 Last updated: 2026-11-19 (Asia/Calcutta).
 
+## Desktop launcher checkpoint
+
+- `demo_app/csv_viewer_gui.py`: Tkinter CSV Inspector (open, filter, export; numeric summaries enabled by `demo_app/bundle_gui.py` from sequence 2). CLI-compatible headless paths: `--version`, `--self-test`, `file --contains --export`. The `--self-test` constructs the Tk widgets, so it works on a desktop and stays portable on headless hosts.
+- `demo_app/bundle_gui.py`: builds GUI releases into signed ZIPs with `entrypoint=app.py`, mirroring `reference.py` (summaries from sequence 2; `broken=True` makes only the pre-commit self-test fail with exit 17).
+- `demo_app/gui_launcher.py`: thin launcher with zero trust material and zero verification. `--install` initializes from a genuine bootstrap then updates; `--check-updates` runs the verified updater CLI; `--gui` opens the app with `--client-dir` so its in-app "Check for updates" button calls the same CLI; `--status` reports the installed state. The launcher never bypasses the TUF client.
+- `tests/test_launcher.py` (6 tests): GUI bundles through the real TUF pipeline — install seq1, publish seq2, update, restart into 1.1.0 with summaries visible; a tampered seq2 artifact is rejected with `TARGET_INTEGRITY_FAILED` while the working version is retained; broken release fails its self-test; headless CLI paths; launcher delegation. The widget test passes on this host (display available) and is skipped headless.
+- `docs/GUI.md` documents the trust boundary, first-time install, update/restart, and the presentation sequence.
+- `.\.venv\Scripts\python.exe -m pytest -q`: **39 passed in 52.00s**. `pip check` clean. Fresh full demo at `.runtime/demo-761d96b3818d/` passed all 11 scenarios and 3 comparisons.
+- Limits: GUI releases remain source ZIPs run by the local Python interpreter (no PyInstaller standalone executable); the app cannot self-update the launcher; the launcher assumes the package is importable from the venv it is launched from.
+- Open after this checkpoint: live operator console, final course report + 10–15 minute demo script, independent security review with regression tests, root-signer/external-key rotation, metadata renewal, and executable packaging.
+
 ## Publisher recovery checkpoint
 
 - Release publication and local targets-key rotation now write a private `publication-journal.json` before changing public metadata. The journal contains the exact signed metadata and the pending release or rotation details. The same publisher lock protects normal publication and recovery.
