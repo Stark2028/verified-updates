@@ -2,6 +2,14 @@
 
 Last updated: 2026-11-19 (Asia/Calcutta).
 
+## Independent security review checkpoint
+
+- Reviewed the current core (`client.py`, `publisher.py` incl. the recovery journal, `storage.py`, `keys.py`, `installer.py`, `approvals.py`) against the threat model, not just the original author's assumptions. **No new security defect was found.** The recovery journal replays already-signed bytes without re-signing, fails closed, and is bounded; archive unpacking still rejects traversal/links/reserved names/case-conflict; `import_approval` validates the strict `{keyid, sig}` shape, authorizes against the authoritative root, verifies cryptographically, and dedupes by keyid; the client short-circuits the exact current release without re-verifying the served artifact (correct, since the signed digest already matched).
+- Added `tests/test_security_invariants.py` (7 tests) pinning previously-implied invariants: application-sequence rollback (`RELEASE_ROLLBACK`), sequence reuse with a new digest (`RELEASE_SEQUENCE_REUSED`), fail-closed on out-of-schema active state and on an active pointer escaping the version tree, and bootstrap rejection of a root with an under-quorum signature, a non-root role, and garbage bytes. These manipulate trusted operator-side state on purpose: they prove the client fails closed rather than accepting.
+- Confirmed documented limits still hold (now also covered by test): a failed post-publication self-test advances `ordering.json` while `active.json` retains the working version; first-time-init and power-loss recovery remain outside the tested interruption cases.
+- `.\.venv\Scripts\python.exe -m pytest -q`: **46 passed in 57.05s**.
+- Open after this checkpoint: live operator console, final course report + 10–15 minute demo script, root-signer/external-key rotation, metadata renewal, and executable packaging.
+
 ## Desktop launcher checkpoint
 
 - `demo_app/csv_viewer_gui.py`: Tkinter CSV Inspector (open, filter, export; numeric summaries enabled by `demo_app/bundle_gui.py` from sequence 2). CLI-compatible headless paths: `--version`, `--self-test`, `file --contains --export`. The `--self-test` constructs the Tk widgets, so it works on a desktop and stays portable on headless hosts.
