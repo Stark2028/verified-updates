@@ -2,6 +2,8 @@
 
 **Secure Software Updates Under Repository Compromise** — a BTech seventh-semester cryptography project.
 
+Author **Sameer** ([Stark2028](https://github.com/Stark2028)).
+
 Publish a real application release, verify it with The Update Framework (TUF), and install it without overwriting the working version. Then alter the repository and observe exactly what the client accepts or rejects.
 
 The current milestone includes a reusable Python updater, a publisher CLI, a working CSV Inspector reference application, a real HTTP attack lab, and an offline HTML evidence report. Windows portable executable packaging and the live management interface remain future milestones.
@@ -40,6 +42,8 @@ The comparison measures artifact acceptance by an unsigned-checksum client, a si
 These are controlled scenario results, not a measured real-world attack detection percentage. See [the threat model](docs/THREAT_MODEL.md).
 
 ## Verify the implementation
+
+The [benchmark and measured results](docs/MEASUREMENTS.md) cover real v1-to-v2 updates. The [detached approvals guide](docs/APPROVALS.md) shows how maintainers can authorize releases with separate keys.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -99,7 +103,7 @@ For a later reference application build, `verified_updates.reference.reference_b
 
 Read [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [demo guidance](docs/DEMO.md). Authentic initial provisioning, an uncompromised client, retained client state, and a reasonably trustworthy clock are explicit assumptions. Signing keys are separate from public storage, but the local demo simulates all maintainers on one machine.
 
-The installer currently supports Python source ZIPs with one entrypoint, and retains staged/previous versions. Automatic garbage collection, executable packaging, independent offline approval exchange, publisher crash recovery, broader network error handling, and deployment hardening are still pending.
+The installer supports Python source ZIPs with one entrypoint and retains staged and previous versions. Executable packaging, automatic cleanup, publisher crash recovery and deployment hardening remain open. Detached approvals support a single application and platform per repository. The local key rotation command is for the default demo mode.
 
 ## Continue with Claude or another assistant
 

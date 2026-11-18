@@ -3,11 +3,29 @@
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from securesystemslib.signer import CryptoSigner
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from securesystemslib.signer import CryptoSigner, SSlibKey
 
 from verified_updates.contracts import UpdateError
 from verified_updates.storage import atomic_write
+
+
+def generate_maintainer_key(directory: Path, passphrase: bytes) -> Path:
+    signer = generate_signer(directory, passphrase)
+    public = Ed25519PublicKey.from_public_bytes(bytes.fromhex(signer.public_key.keyval["public"]))
+    path = directory / f"{signer.public_key.keyid}.pub.pem"
+    atomic_write(path, public.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo))
+    return path
+
+
+def load_public_key(path: Path) -> SSlibKey:
+    try:
+        public = serialization.load_pem_public_key(path.read_bytes())
+    except ValueError as exc:
+        raise UpdateError("INVALID_KEY", "Expected a PEM-encoded Ed25519 public key.") from exc
+    if not isinstance(public, Ed25519PublicKey):
+        raise UpdateError("INVALID_KEY", "Expected an Ed25519 public key.")
+    return SSlibKey.from_crypto(public)
 
 
 def generate_signer(directory: Path, passphrase: bytes) -> CryptoSigner:

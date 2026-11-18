@@ -1,0 +1,143 @@
+{
+  "bundle_bytes": 1050391,
+  "environment": {
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13645HX",
+    "logical_cpus": 20,
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+  },
+  "median": {
+    "artifact_bytes": 1050391,
+    "download_and_verify_ms": 16.52,
+    "install_ms": 93.842,
+    "metadata_bytes": 1803,
+    "metadata_ms": 70.587,
+    "total_ms": 203.018
+  },
+  "method": "Loopback HTTP, preinstalled v1, sequential v2 updates. Metadata and artifact timings include verification inside python-tuf. Byte counts cover response bodies consumed by the verifier.",
+  "sample_count": 15,
+  "samples": [
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 16.327599998476217,
+      "install_ms": 88.97819999765488,
+      "metadata_bytes": 1803,
+      "metadata_ms": 70.58690000121715,
+      "total_ms": 198.17470000270987
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 5.459799998789094,
+      "install_ms": 90.21809999831021,
+      "metadata_bytes": 1803,
+      "metadata_ms": 79.55909999873256,
+      "total_ms": 196.3112999983423
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 17.170499999338062,
+      "install_ms": 111.21659999844269,
+      "metadata_bytes": 1803,
+      "metadata_ms": 73.63660000191885,
+      "total_ms": 217.324400000507
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 32.74590000000899,
+      "install_ms": 94.19899999920744,
+      "metadata_bytes": 1803,
+      "metadata_ms": 75.29179999983171,
+      "total_ms": 231.61469999831752
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 18.29329999964102,
+      "install_ms": 91.57910000067204,
+      "metadata_bytes": 1803,
+      "metadata_ms": 73.28620000043884,
+      "total_ms": 203.01820000167936
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 25.46050000091782,
+      "install_ms": 83.77560000008089,
+      "metadata_bytes": 1803,
+      "metadata_ms": 51.61380000208737,
+      "total_ms": 176.17389999941224
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 14.49979999961215,
+      "install_ms": 88.08480000152485,
+      "metadata_bytes": 1803,
+      "metadata_ms": 56.08109999957378,
+      "total_ms": 175.02109999986715
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 29.38240000003134,
+      "install_ms": 126.43419999949401,
+      "metadata_bytes": 1803,
+      "metadata_ms": 50.321400001848815,
+      "total_ms": 226.17430000173044
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 32.06259999933536,
+      "install_ms": 90.06930000032298,
+      "metadata_bytes": 1803,
+      "metadata_ms": 46.685199999046745,
+      "total_ms": 184.52830000023823
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 8.36179999896558,
+      "install_ms": 95.96590000001015,
+      "metadata_bytes": 1803,
+      "metadata_ms": 44.90799999985029,
+      "total_ms": 163.63629999978002
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 16.086399999039713,
+      "install_ms": 94.25719999853754,
+      "metadata_bytes": 1803,
+      "metadata_ms": 86.77700000043842,
+      "total_ms": 217.65450000020792
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 4.36959999933606,
+      "install_ms": 98.97179999825312,
+      "metadata_bytes": 1803,
+      "metadata_ms": 62.60590000238153,
+      "total_ms": 186.64220000209752
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 16.230400000495138,
+      "install_ms": 92.31179999915184,
+      "metadata_bytes": 1803,
+      "metadata_ms": 76.24009999926784,
+      "total_ms": 204.18489999792655
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 30.64969999832101,
+      "install_ms": 101.91289999784203,
+      "metadata_bytes": 1803,
+      "metadata_ms": 64.88160000299104,
+      "total_ms": 213.56979999836767
+    },
+    {
+      "artifact_bytes": 1050391,
+      "download_and_verify_ms": 16.52040000044508,
+      "install_ms": 93.84159999899566,
+      "metadata_bytes": 1803,
+      "metadata_ms": 74.88650000232155,
+      "total_ms": 210.6493000028422
+    }
+  ],
+  "schema_version": 1,
+  "warmup_runs_excluded": 1
+}

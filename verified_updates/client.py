@@ -1,6 +1,7 @@
 """Persisted TUF verification, artifact validation and installation outcomes."""
 
 from pathlib import Path
+from time import perf_counter
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -8,6 +9,7 @@ from tuf.api import exceptions as tuf_errors
 from tuf.api.metadata import Metadata, Root
 from tuf.api.serialization import DeserializationError
 from tuf.ngclient import Updater
+from tuf.ngclient.fetcher import FetcherInterface
 from urllib3.exceptions import HTTPError as TransportError
 
 from verified_updates.contracts import Release, UpdateError, UpdateResult, identifier
@@ -59,7 +61,8 @@ def _failure(exc: Exception, stage: str) -> tuple[str, str]:
     return "failed", "LOCAL_IO_FAILED"
 
 
-def update(client: Path) -> UpdateResult:
+def update(client: Path, *, timings: dict[str, float] | None = None, fetcher: FetcherInterface | None = None) -> UpdateResult:
+    started = perf_counter()
     client = client.resolve()
     config = read_json(client / "client.json")
     state = active_state(client)
@@ -74,15 +77,19 @@ def update(client: Path) -> UpdateResult:
             result.installed_before = result.installed_after = before
             repository = config["repository_url"]
             result.stage = "refresh_metadata"
+            phase = perf_counter()
             updater = Updater(
                 str(client / "metadata"), repository + "metadata/",
                 target_dir=str(client / "downloads"), target_base_url=repository + "targets/",
                 bootstrap=None if (client / "metadata" / "root.json").exists() else (client / "bootstrap-root.json").read_bytes(),
+                fetcher=fetcher,
             )
             updater.refresh()
             result.stage = "select_release"
             target_path = f"apps/{config['app_id']}/{config['platform']}/application.zip"
             target = updater.get_targetinfo(target_path)
+            if timings is not None:
+                timings["metadata_ms"] = (perf_counter() - phase) * 1000
             if target is None:
                 raise UpdateError("NO_RELEASE", "No authorized release exists for this application and platform.")
             release = Release.from_custom(target.custom)
@@ -104,11 +111,17 @@ def update(client: Path) -> UpdateResult:
                 result.outcome, result.reason_code, result.detail = "up_to_date", "CURRENT_RELEASE", "Installed release matches the verified target."
             else:
                 result.stage = "download_artifact"
+                phase = perf_counter()
                 artifact = Path(updater.download_target(target, str(client / "downloads" / f"{run_id}.zip")))
+                if timings is not None:
+                    timings["download_and_verify_ms"] = (perf_counter() - phase) * 1000
                 # Security state can advance even if an authorized release later fails its self-test.
                 write_json(ordering_path, {"schema_version": 1, "sequence": release.sequence, "sha256": digest})
                 result.stage = "install"
+                phase = perf_counter()
                 activate(client, artifact, release, digest)
+                if timings is not None:
+                    timings["install_ms"] = (perf_counter() - phase) * 1000
                 result.outcome, result.reason_code = "updated", "VERIFIED_AND_INSTALLED"
                 result.detail = "TUF metadata and artifact verified; application self-test passed; active pointer committed."
                 result.installed_after = release.sequence
@@ -117,5 +130,7 @@ def update(client: Path) -> UpdateResult:
         result.outcome, result.reason_code = _failure(exc, result.stage)
         result.detail = f"{type(exc).__name__}: {exc}"
     write_json(client / "events" / f"{run_id}.json", result.to_dict())
+    if timings is not None:
+        timings["total_ms"] = (perf_counter() - started) * 1000
     return result
 

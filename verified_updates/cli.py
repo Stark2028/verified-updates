@@ -8,11 +8,16 @@ from pathlib import Path
 from threading import Event
 
 from tuf.api.exceptions import RepositoryError
+from tuf.api.serialization import DeserializationError
 
 from verified_updates.client import initialize_client, update
 from verified_updates.contracts import Release, UpdateError
 from verified_updates.installer import active_state, build_bundle, run_installed
-from verified_updates.publisher import approve_release, configuration, initialize, inspect_release, prepare_release, publish_release, rotate_targets_key
+from verified_updates.keys import generate_maintainer_key, load_public_key
+from verified_updates.publisher import (
+    approve_release, configuration, export_request, import_approval, initialize,
+    inspect_release, prepare_release, publish_release, rotate_targets_key,
+)
 from verified_updates.server import serve_directory
 
 
@@ -40,6 +45,7 @@ def parser() -> argparse.ArgumentParser:
     init = pub.add_parser("init")
     init.add_argument("--publisher", type=Path, required=True)
     init.add_argument("--repository", type=Path, required=True)
+    init.add_argument("--maintainer-key", type=Path, action="append", help="Repeat for each of three separate Ed25519 public keys.")
     prepare = pub.add_parser("prepare")
     prepare.add_argument("--publisher", type=Path, required=True)
     prepare.add_argument("--artifact", type=Path, required=True)
@@ -50,11 +56,28 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--release", required=True)
         if name == "approve":
             command.add_argument("--signer", type=int, required=True)
+    for name, file_flag in (("export-request", "--output"), ("import-approval", "--approval")):
+        command = pub.add_parser(name)
+        command.add_argument("--publisher", type=Path, required=True)
+        command.add_argument("--release", required=True)
+        command.add_argument(file_flag, type=Path, required=True)
     rotate = pub.add_parser("rotate-targets-key")
     rotate.add_argument("--publisher", type=Path, required=True)
     rotate.add_argument("--signer", type=int, required=True)
     info = pub.add_parser("info")
     info.add_argument("--publisher", type=Path, required=True)
+    maintainer = commands.add_parser("maintainer").add_subparsers(dest="action", required=True)
+    keygen = maintainer.add_parser("keygen")
+    keygen.add_argument("--key-dir", type=Path, required=True)
+    for action in ("inspect", "sign"):
+        command = maintainer.add_parser(action)
+        for flag in ("--request", "--artifact", "--root"):
+            command.add_argument(flag, type=Path, required=True)
+        if action == "sign":
+            command.add_argument("--key-dir", type=Path, required=True)
+            command.add_argument("--key-id", required=True)
+            command.add_argument("--expect-digest", required=True)
+            command.add_argument("--output", type=Path, required=True)
     client = commands.add_parser("client").add_subparsers(dest="action", required=True)
     init = client.add_parser("init")
     init.add_argument("--client", type=Path, required=True)
@@ -80,6 +103,10 @@ def parser() -> argparse.ArgumentParser:
     report = commands.add_parser("report")
     report.add_argument("--input", type=Path, required=True)
     report.add_argument("--output", type=Path)
+    benchmark = commands.add_parser("benchmark")
+    benchmark.add_argument("--directory", type=Path)
+    benchmark.add_argument("--samples", type=int, default=15)
+    benchmark.add_argument("--payload-kib", type=int, default=1024)
     return root
 
 
@@ -88,7 +115,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "publisher":
             if args.action == "init":
-                result = {"bootstrap": str(initialize(args.publisher, args.repository, _passphrase()))}
+                keys = [load_public_key(path) for path in args.maintainer_key] if args.maintainer_key else None
+                result = {"bootstrap": str(initialize(args.publisher, args.repository, _passphrase(), maintainer_keys=keys))}
             elif args.action == "prepare":
                 result = {"release_id": prepare_release(args.publisher, args.artifact, _release(args))}
             elif args.action == "inspect":
@@ -99,8 +127,23 @@ def main(argv: list[str] | None = None) -> int:
                 result = {"target_path": publish_release(args.publisher, args.release, _passphrase())}
             elif args.action == "rotate-targets-key":
                 result = {"new_keyid": rotate_targets_key(args.publisher, args.signer, _passphrase())}
+            elif args.action == "export-request":
+                result = {"request": str(export_request(args.publisher, args.release, args.output))}
+            elif args.action == "import-approval":
+                result = {"signature_count": import_approval(args.publisher, args.release, args.approval)}
             else:
                 result = configuration(args.publisher)
+        elif args.command == "maintainer":
+            from verified_updates.approvals import inspect_request, sign_request
+
+            if args.action == "keygen":
+                public = generate_maintainer_key(args.key_dir, _passphrase())
+                result = {"public_key": str(public.resolve()), "keyid": load_public_key(public).keyid}
+            elif args.action == "inspect":
+                result = inspect_request(args.request, args.artifact, args.root)
+            else:
+                result = sign_request(args.request, args.artifact, args.root, args.key_dir, args.key_id,
+                                      _passphrase(), args.expect_digest, args.output)
         elif args.command == "client":
             if args.action == "init":
                 initialize_client(args.client, args.bootstrap, args.repository_url, args.app_id, args.platform)
@@ -128,6 +171,11 @@ def main(argv: list[str] | None = None) -> int:
                 raise UpdateError("INVALID_INPUT", "HTML output must differ from the JSON evidence file.")
             render_report(json.loads(args.input.read_text(encoding="utf-8")), output, source=args.input)
             result = {"report": str(output.resolve())}
+        elif args.command == "benchmark":
+            from verified_updates.benchmark import run_benchmark
+
+            measured = run_benchmark(args.samples, args.payload_kib, args.directory)
+            result = {key: value for key, value in measured.items() if key != "samples"}
         else:
             from verified_updates.lab import run_demo
             result = run_demo(args.directory)
@@ -143,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["all_passed"] else 1
         print(json.dumps(result, indent=2))
         return 0
-    except (UpdateError, RepositoryError, OSError, ValueError) as exc:
+    except (UpdateError, RepositoryError, DeserializationError, OSError, ValueError) as exc:
         print(json.dumps({"error": getattr(exc, "code", type(exc).__name__), "detail": str(exc)}, indent=2))
         return 2
     except KeyboardInterrupt:

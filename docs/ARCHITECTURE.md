@@ -36,7 +36,7 @@ flowchart LR
 
 Publisher configuration, encrypted keys, pending releases and authoritative metadata live in the publisher tree. The served repository is a separate tree. Release preparation reads private state, so replacing public metadata does not cause the publisher to endorse attacker-controlled metadata on its next release.
 
-Targets and root require two distinct signatures from three authorized keys. Snapshot and timestamp have distinct one-key roles. Approving twice with the same key still counts as one signature. The current local CLI keeps these files in one publisher tree and uses a common passphrase; real independent custody and portable approval exchange are later work.
+Targets and root require two distinct signatures from three authorized keys. Snapshot and timestamp have distinct one-key roles. Approving twice with the same key still counts as one signature. The default demo keeps keys in the publisher tree. The detached workflow registers three maintainer public keys and authorizes one app and platform per repository. Maintainers check the actual artifact and exact request digest before signing. The publisher verifies each returned signature against the pending TUF metadata. Root, snapshot and timestamp keys remain with the publisher in both modes. [Detached approvals guide](APPROVALS.md)
 
 Artifacts are published under hash-prefixed filenames. Versioned targets and snapshot metadata are written before the mutable timestamp. Private state is updated after public publication. This ordering fails closed at clients during incomplete publication, but the publisher's multi-file state is not yet a transactional crash-recovery system.
 

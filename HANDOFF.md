@@ -2,6 +2,15 @@
 
 Last updated: 2026-11-19 (Asia/Calcutta).
 
+## Git, performance and detached approvals checkpoint
+
+- The project is a local Git repository on `main`. The baseline commit is `48e90e3`. Git and package authorship are set to Sameer. The local Git email uses the no-reply address for `Stark2028`. Runtime files, caches, the virtual environment and PEM files stay outside Git tracking.
+- `python -m verified_updates benchmark --samples 15 --payload-kib 1024` measured a 203.0 ms median update and 1,803 metadata bytes for a 1,050,391-byte bundle. The report gives the methodology and limitations. All samples are kept in `docs/evidence/benchmark-windows-1mib.json`. See `docs/MEASUREMENTS.md`.
+- External targets approval is available through `publisher init --maintainer-key`, `publisher export-request`, `maintainer inspect`, `maintainer sign`, and `publisher import-approval`. Three public keys are enrolled. Two private keys in separate directories with distinct passphrases approved an artifact that the official updater then installed over HTTP. A wrong artifact, an altered request digest and an approval for another release were rejected. Reimporting a signature did not increase the count. This was tested on one machine. See `docs/APPROVALS.md`.
+- `.\.venv\Scripts\python.exe -m pytest -q` passed 30 tests in 35.29s. A separate CLI smoke run generated keys, inspected and signed a request, imported each approval, and confirmed that publication fails with one and succeeds with two. `pip check` found no broken requirements.
+- The existing 11-case demo and three comparisons still pass. The latest full demo is `.runtime/review-detached-baseline/report.html`, generated with `.\.venv\Scripts\python.exe -m verified_updates demo --directory .runtime/review-detached-baseline --summary`. Omit the directory flag for a fresh run.
+- Next presentation work is a portable Windows launcher and a 10–15 minute script. The measurements and approval guide are ready to cite in the report. Publisher crash recovery, detached key rotation and metadata renewal remain open.
+
 ## Review checkpoint
 
 The November 19 review reran the existing suite (24 passed), then fixed issues in bootstrap provisioning, publisher approvals, report export links, and CSV parsing. The expanded suite passed **29 tests in 34.76s**. Dependency consistency and Python compilation passed. A new run at `.runtime/review-2026-11-19/` passed all **11 scenarios and 3 comparisons**. Its HTML and JSON are the latest evidence. The original milestone remains available for comparison.
@@ -13,7 +22,7 @@ Review commands were `.\.venv\Scripts\python.exe -m pytest -q`, `.\.venv\Scripts
 - The demo records the real publisher inspection result in the first successful installation and the one-signer rejection. The mix-and-match fixture now serves an actual older snapshot in place of the newer one.
 - Report exports link back to the selected evidence file. CSV errors are reported cleanly, non-finite numeric columns are excluded from statistics, and the export cannot overwrite its source file.
 
-The highest-value remaining engineering work is publisher recovery after interrupted publication or rotation, metadata renewal without a new application release, and approval exchange between maintainers with separate keys. The first two improve ordinary operation. The third makes the two-signature demonstration more meaningful. The local HTTP server and source-bundle installer remain scoped to the current demo. There has been no production deployment, independent security audit, or external vulnerability database scan.
+At this earlier review, publisher recovery, metadata renewal and approval exchange were open. The checkpoint above records the subsequent approval work. The local HTTP server and source-bundle installer remain scoped to the current demo. There has been no production deployment, independent security audit, or external vulnerability database scan.
 
 ## User intent and decisions
 
@@ -47,7 +56,7 @@ Implemented:
 - An offline HTML report with actual JSON disclosures, comparison table, captured installed-app output, explicit boundaries, and escaped untrusted diagnostics.
 - README, docs/ARCHITECTURE.md, docs/THREAT_MODEL.md, docs/DEMO.md, PRODUCT.md and DESIGN.md.
 
-No packaged executable, desktop GUI, live management console, independent offline approval exchange, or root-signer rotation CLI exists yet.
+Packaged executable, desktop GUI, live management console, and root-signer rotation remain open.
 
 ## Verified commands and evidence
 
@@ -82,7 +91,7 @@ The original model/earlier source may mention a prototype folder: the new packag
 - Codex sandbox blocked Python's default temporary files and some atomic ZIP operations. Dependency provisioning, real integration tests and demos were run with the tool's approved escalation. This is execution-environment behaviour; normal local PowerShell does not need that tool flag.
 - The escalated command environment routed loopback through a proxy even though the sandbox environment did not. Lab subprocesses explicitly add only 127.0.0.1/localhost to NO_PROXY; normal remote-client proxy behaviour is preserved. Manual localhost usage has the corresponding README command.
 - Initial failed demo directories are retained under .runtime/ as evidence; the milestone-1 report is the successful checkpoint.
-- No Git repository has been initialized and no commits/pushes were made. Old nested repositories were removed with their old projects at the user's request.
+- Old nested repositories were removed with their old projects at the user's request. The project now uses one local repository at the workspace root.
 - No ongoing repository HTTP server is needed to view the completed HTML report or run the installed application.
 
 ## Core requirements
@@ -96,12 +105,12 @@ The original model/earlier source may mention a prototype folder: the new packag
 
 ## Important implementation limits and review targets
 
-1. **Custody:** approval operations are separate, but all key files are currently in one publisher directory and share a passphrase. Real independent maintainers need portable signing requests, isolated key paths/devices, and signature import/verification. Never present current storage as independent custody.
+1. **Custody:** the default demo keeps keys in one directory. Detached release approvals support isolated key directories and can be exchanged between machines. Root, snapshot and timestamp keys are still grouped at the publisher.
 2. **Publisher recovery:** publication/targets-key replacement updates multiple files; publication ordering is fail-closed for clients, but there is no transactional publisher recovery journal. Review interrupted initialization/publication/rotation before claiming reliable ongoing publisher operation.
 3. **Installer format:** source ZIP + Python interpreter only. No standalone Windows executable, updater self-update, automatic cleanup, disk-full coverage, power-loss guarantee, or complete interruption matrix. Existing process-crash proof covers the commit boundary only.
 4. **Bootstrap/client state:** initial root and client host/state/clock are trusted assumptions. Initial client configuration validation and corrupted-local-state diagnostics can be strengthened. Never fetch an initial key from an untrusted repository and call it authenticated.
-5. **Key lifecycle:** targets-key replacement exists; actual root-signing-key rotation, expired-role maintenance commands and offline approval exchange remain pending.
-6. **Academic evaluation:** the three baselines and scenario evidence exist; controlled performance/overhead measurements on recorded hardware and a final course report/presentation are still missing. No real-world attack-detection rate is justified.
+5. **Key lifecycle:** the local demo supports targets-key replacement. External targets rotation, root-signer rotation, and metadata renewal remain open.
+6. **Academic evaluation:** the baselines, scenario evidence and first measured benchmark are available. The course report and presentation remain open.
 7. **UI:** current report is an offline reader. The planned live operator console, desktop application, and published deployment are not implemented.
 8. **Independent review:** Claude should review security boundaries and add independent tests; current core/tests were authored by Codex. The report-only finish review is not a security audit.
 
@@ -109,10 +118,10 @@ The original model/earlier source may mention a prototype folder: the new packag
 
 1. Run the documented tests and a fresh demo. Read the successful JSON evidence and source before changing contracts.
 2. Perform an independent security review of client/publisher state, approvals, archive handling and key rotation. Add regression tests for concrete discovered issues.
-3. Add portable approval-request export/sign/import, and strengthen publisher initialization/publication/rotation recovery. Preserve the distinct root and release roles.
+3. Strengthen publisher initialization, publication and rotation recovery. Preserve the distinct root and release roles.
 4. Package the reference app and launcher for Windows, then adapt the installer to that explicit bundle format while retaining trusted state outside version payloads. Add the GUI CSV viewer and a real update/restart action.
 5. Build the local operator console on actual existing result contracts. Keep signing keys outside that process; use the offline report's evidence semantics and design tokens as appropriate.
-6. Complete transport/failure coverage and key-lifecycle scenarios, collect real performance measurements, and finish the report/viva/demo script.
+6. Complete transport and key-lifecycle coverage, and use the recorded benchmark to finish the report and viva script.
 
 ## Suggested Claude continuation prompt
 
