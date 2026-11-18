@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "verified-updates"
+version = "0.1.0"
+description = "TUF-based application updates and reproducible repository-compromise experiments"
+requires-python = ">=3.12"
+dependencies = [
+  "tuf==7.0.1",
+  "securesystemslib[crypto]==1.6.0",
+  "cryptography==50.0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0"]
+
+[project.scripts]
+verified-updates = "verified_updates.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["verified_updates*", "demo_app*"]
+
+[tool.setuptools.package-data]
+demo_app = ["sample.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+

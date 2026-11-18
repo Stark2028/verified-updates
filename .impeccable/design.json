@@ -1,0 +1,22 @@
+{
+  "surface": "offline-evidence-report",
+  "mode": "read",
+  "source": "verified_updates/report.py",
+  "tokens": {
+    "paper": "#f5f5f0",
+    "surface": "#ffffff",
+    "ink": "#1b2b34",
+    "muted": "#52636b",
+    "line": "#cdd6d8",
+    "focus": "#155e7a",
+    "success": "#1b6245",
+    "successBackground": "#e8f2eb",
+    "concern": "#92382e",
+    "concernBackground": "#f8eae7"
+  },
+  "fonts": {
+    "body": "Segoe UI, Arial, sans-serif",
+    "evidence": "Consolas, Courier New, monospace"
+  },
+  "engineContextLoaded": false
+}
