@@ -6,7 +6,19 @@ Author **Sameer** ([Stark2028](https://github.com/Stark2028)).
 
 Publish a real application release, verify it with The Update Framework (TUF), and install it without overwriting the working version. Then alter the repository and observe exactly what the client accepts or rejects.
 
-The current milestone includes a reusable Python updater, a publisher CLI, a working CSV Inspector reference application, a real HTTP attack lab, and an offline HTML evidence report. Windows portable executable packaging and the live management interface remain future milestones.
+The project includes a reusable Python updater, a publisher CLI, a desktop CSV Inspector, and a local HTTP lab. The desktop app runs from the installed, verified release and requires Windows with Python and Tkinter.
+
+## Start the desktop workflow
+
+With Python 3.12 and Tkinter installed, run these commands from the project directory in PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock
+.\.venv\Scripts\python.exe -m verified_updates desktop-demo --show
+```
+
+If `.venv` is already set up, run only the last command. Close each CSV Inspector window to advance. The workflow installs v1, rejects a modified v2 while v1 remains active, restores the genuine v2, and opens the updated app with numeric summaries. Omit `--show` for an automated check through the same launcher. [Desktop workflow](docs/GUI.md)
 
 ## Run the demonstration
 
@@ -104,6 +116,8 @@ For a later reference application build, `verified_updates.reference.reference_b
 Read [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [demo guidance](docs/DEMO.md). Authentic initial provisioning, an uncompromised client, retained client state, and a reasonably trustworthy clock are explicit assumptions. Signing keys are separate from public storage, but the local demo simulates all maintainers on one machine.
 
 If a publisher process stops during publication or local key rotation, run `publisher recover --publisher PATH`. Recovery replays the saved publication without asking for a passphrase or issuing new signatures. Keep the pending artifact available until recovery finishes. See the [publisher recovery workflow](docs/ARCHITECTURE.md#publisher-state-and-ordering).
+
+Run `publisher renew-metadata --publisher PATH` to renew the one-day timestamp and seven-day snapshot while keeping the approved release unchanged. To renew targets metadata, run `publisher prepare-renewal --publisher PATH --artifact ORIGINAL_ZIP --app-id csv-inspector`, obtain two approvals, and publish the resulting release ID. Use the existing detached approval steps for external maintainers. The publisher checks the supplied ZIP against the original digest and preserves the release sequence.
 
 The installer supports Python source ZIPs with one entrypoint and retains staged and previous versions. Executable packaging, automatic cleanup and deployment hardening remain open. Detached approvals support a single application and platform per repository. The local key rotation command is for the default demo mode.
 

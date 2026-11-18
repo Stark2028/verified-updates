@@ -2,6 +2,16 @@
 
 Last updated: 2026-11-19 (Asia/Calcutta).
 
+## End-to-end desktop and renewal checkpoint
+
+- The user scoped this pass to the working project. Course reports and slides are excluded.
+- `python -m verified_updates gui-launcher` now opens the active installed app through `client run`. Both headless and desktop paths report the installed version. Verification failures keep their exit codes and do not fall back to a checkout viewer.
+- `python -m verified_updates desktop-demo --show` creates a fresh local publisher, repository and client, then opens v1, confirms v1 still opens after rejecting a changed v2 ZIP, and opens genuine v2 with numeric summaries. Close each window to advance. Omit `--show` for the automated launcher checks.
+- `publisher renew-metadata --publisher PATH` reissues snapshot and timestamp, while `publisher prepare-renewal --publisher PATH --artifact ORIGINAL_ZIP --app-id csv-inspector` drafts targets renewal for the same release. The targets draft needs two normal or detached approvals. No app release sequence changes.
+- `.\.venv\Scripts\python.exe -m pytest -q` passed **48 tests in 58.48s**. The existing HTTP demo passed **11 scenarios and 3 comparisons** in `.runtime/desktop-full-lab/`. The new desktop demo passed in `.runtime/desktop-acceptance/`.
+- Built and installed the package into a fresh Windows virtual environment with `pip install -r requirements.lock` and `pip install --no-deps .`. From `.runtime/`, it passed `python -m verified_updates desktop-demo --directory installed-package-acceptance`. Verified import from the fresh environment’s `site-packages`, Tk 8.6.15, and `gui-launcher --client-dir installed-package-acceptance/client --gui --app-arg=--self-test` returned version 1.1.0 and `self_test: passed`. Used the same Windows machine with a fresh Python environment. The visible click-through mode remains available for a manual rehearsal.
+- Optional scope includes standalone executable packaging, the operator console, and root or externally held signing key rotation. Python 3.12 and Tkinter remain runtime requirements.
+
 ## Independent security review checkpoint
 
 - Reviewed the current core (`client.py`, `publisher.py` incl. the recovery journal, `storage.py`, `keys.py`, `installer.py`, `approvals.py`) against the threat model, not just the original author's assumptions. **No new security defect was found.** The recovery journal replays already-signed bytes without re-signing, fails closed, and is bounded; archive unpacking still rejects traversal/links/reserved names/case-conflict; `import_approval` validates the strict `{keyid, sig}` shape, authorizes against the authoritative root, verifies cryptographically, and dedupes by keyid; the client short-circuits the exact current release without re-verifying the served artifact (correct, since the signed digest already matched).

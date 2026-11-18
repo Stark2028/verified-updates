@@ -6,14 +6,24 @@
 
 The GUI app and its launcher (`demo_app/gui_launcher.py`) contain **no trust material and no verification logic**. The launcher is deliberately thin: it initializes the client from a genuine bootstrap, runs `verified_updates client update`, and launches the installed version through the same CLI. The in-app "Check for updates" button calls the updater CLI too. All TUF verification, integrity checks, staging and activation stay in the verified updater; the desktop layer cannot bypass or weaken them. If the app files are tampered with locally, that is outside the repository-compromise model — the updater still only accepts authorized releases.
 
-## First-time install and run
+## Run the complete desktop workflow
 
-Prepare a GUI release with the publisher workflow in the README, then use `bundle_gui` to build the artifact instead of the CLI source bundle:
+From the project directory, with the README environment installed, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m verified_updates desktop-demo --show
+```
+
+Each run creates a fresh publisher, repository and client. Close the app window to advance from v1 to the rejection check, and again to see v2 with numeric summaries. Omit `--show` to check the same installed-app launch route using its version and feature output. The lab repository is available while the command is running.
+
+## First-time install from your own repository
+
+Build the GUI ZIP with `demo_app.bundle_gui.gui_bundle`, publish it with the README publisher workflow, then serve the public repository. Install the published release and inspect the client state:
 
 ```powershell
 $python = '.\.venv\Scripts\python.exe'
-& $python -m verified_updates client init --client .runtime/gui/client --bootstrap .runtime/manual/publisher/bootstrap/root.json --repository-url http://127.0.0.1:8080/ --app-id csv-inspector
-& $python -m verified_updates gui-launcher --client-dir .runtime/gui/client --install --status
+$env:NO_PROXY = "$env:NO_PROXY,127.0.0.1,localhost"
+& $python -m verified_updates gui-launcher --client-dir .runtime/gui/client --bootstrap .runtime/manual/publisher/bootstrap/root.json --repository-url http://127.0.0.1:8080/ --install --status
 ```
 
 `--install` initializes from the bootstrap when no client exists yet and runs one verified update; `--status` reports the installed state and exits. To open the interactive viewer:

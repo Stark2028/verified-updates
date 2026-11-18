@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
-import shutil
 from typing import Any
 
 from tuf.api.metadata import Metadata, MetaFile, Root, Snapshot, TargetFile, Targets, Timestamp
@@ -148,6 +147,23 @@ def recover_publication(publisher: Path) -> bool:
         return True
 
 
+def renew_metadata(publisher: Path, passphrase: bytes) -> dict[str, int]:
+    """Renew snapshot and timestamp while retaining the authorized targets."""
+    with _publisher_operation(publisher):
+        root = authoritative(publisher, "root")
+        targets = authoritative(publisher, "targets")
+        now = utc_now()
+        if root.signed.is_expired(now):
+            raise UpdateError("ROOT_EXPIRED", "Renew the trusted root before renewing repository metadata.")
+        if targets.signed.is_expired(now):
+            raise UpdateError("TARGETS_EXPIRED", "Prepare and approve a targets renewal before continuing.")
+        root.signed.verify_delegate("targets", targets.signed_bytes, targets.signatures)
+        snapshot, timestamp = _build_publication(publisher, targets, passphrase)
+        _commit_publication(publisher, targets, snapshot, timestamp)
+        return {"targets_version": targets.signed.version, "snapshot_version": snapshot.signed.version,
+                "timestamp_version": timestamp.signed.version}
+
+
 def initialize(publisher: Path, repository: Path, passphrase: bytes, *, maintainer_keys: list[SSlibKey] | None = None) -> Path:
     if maintainer_keys is not None:
         if len(maintainer_keys) != 3 or any(key.keytype != "ed25519" or key.scheme != "ed25519" for key in maintainer_keys):
@@ -221,23 +237,43 @@ def prepare_release(publisher: Path, artifact: Path, release: Release) -> str:
             raise UpdateError("INVALID_INPUT", "Detached approvals currently support one application and platform per repository.")
         if existing and release.sequence <= Release.from_custom(existing.custom).sequence:
             raise UpdateError("RELEASE_ROLLBACK", "New release sequence must exceed the previously published sequence.")
-        pending_id = secrets.token_hex(12)
-        pending = publisher / "pending" / pending_id
-        pending.mkdir(parents=True)
-        shutil.copyfile(artifact, pending / "artifact.zip")
-        target = TargetFile.from_file(release.target_path, str(pending / "artifact.zip"), ["sha256"])
+        target = TargetFile.from_file(release.target_path, str(artifact), ["sha256"])
         target.unrecognized_fields["custom"] = release.to_custom()
-        base_version = targets.signed.version
-        targets.signed.version += 1
-        targets.signed.expires = utc_now() + timedelta(days=30)
         targets.signed.targets[release.target_path] = target
-        targets.signatures.clear()
-        atomic_write(pending / "targets.json", targets.to_bytes())
-        write_json(pending / "release.json", {
-            "schema_version": 1, "base_version": base_version,
-            "target_path": release.target_path, "published": False,
-        })
-        return pending_id
+        return _stage_targets(publisher, artifact, targets, target)
+
+
+def prepare_targets_renewal(publisher: Path, artifact: Path, app_id: str, platform: str) -> str:
+    """Prepare fresh targets metadata for the same artifact and release sequence."""
+    path = f"apps/{identifier(app_id)}/{identifier(platform)}/application.zip"
+    with _publisher_operation(publisher):
+        root = authoritative(publisher, "root")
+        if root.signed.is_expired(utc_now()):
+            raise UpdateError("ROOT_EXPIRED", "Renew the trusted root before renewing targets metadata.")
+        targets = authoritative(publisher, "targets")
+        target = targets.signed.targets.get(path)
+        if target is None:
+            raise UpdateError("NO_RELEASE", "Publish a release for this app and platform before renewing it.")
+        root.signed.verify_delegate("targets", targets.signed_bytes, targets.signatures)
+        return _stage_targets(publisher, artifact, targets, target)
+
+
+def _stage_targets(publisher: Path, artifact: Path, targets: Metadata, target: TargetFile) -> str:
+    data = _artifact_bytes(artifact, target)
+    pending_id = secrets.token_hex(12)
+    pending = publisher / "pending" / pending_id
+    pending.mkdir(parents=True)
+    atomic_write(pending / "artifact.zip", data)
+    base_version = targets.signed.version
+    targets.signed.version += 1
+    targets.signed.expires = utc_now() + timedelta(days=30)
+    targets.signatures.clear()
+    atomic_write(pending / "targets.json", targets.to_bytes())
+    write_json(pending / "release.json", {
+        "schema_version": 1, "base_version": base_version,
+        "target_path": target.path, "published": False,
+    })
+    return pending_id
 
 
 def _pending(publisher: Path, pending_id: str) -> Path:

@@ -115,9 +115,14 @@ def test_gui_updates_restart_into_new_version(tmp_path, monkeypatch):
         active = read_json(client / "active.json")
         assert active["release"]["verified_updates"]["version"] == "1.1.0"
 
-        # Restart into the new version via a fresh, isolated process (headless).
-        app = client / "versions" / active["directory"] / "app.py"
-        info = _headless_app(app, "--version")
+        # Exercise the public GUI launch route with the installed app's version probe.
+        # The source-checkout viewer would report v1 and no numeric summaries.
+        completed = subprocess.run(
+            [sys.executable, "-m", "verified_updates", "gui-launcher", "--client-dir", str(client),
+             "--gui", "--app-arg=--version"],
+            cwd=ROOT, capture_output=True, text=True, check=True, timeout=30,
+        )
+        info = json.loads(completed.stdout)
         assert info["version"] == "1.1.0" and info["numeric_summaries"] is True
 
 

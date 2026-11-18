@@ -10,13 +10,15 @@ from threading import Event
 from tuf.api.exceptions import RepositoryError
 from tuf.api.serialization import DeserializationError
 
+from demo_app.gui_launcher import add_arguments as add_launcher_arguments, dispatch as dispatch_launcher
 from verified_updates.client import initialize_client, update
 from verified_updates.contracts import Release, UpdateError
 from verified_updates.installer import active_state, build_bundle, run_installed
 from verified_updates.keys import generate_maintainer_key, load_public_key
 from verified_updates.publisher import (
     approve_release, configuration, export_request, import_approval, initialize,
-    inspect_release, prepare_release, publish_release, recover_publication, rotate_targets_key,
+    inspect_release, prepare_release, prepare_targets_renewal, publish_release, recover_publication,
+    renew_metadata, rotate_targets_key,
 )
 from verified_updates.server import serve_directory
 
@@ -50,6 +52,11 @@ def parser() -> argparse.ArgumentParser:
     prepare.add_argument("--publisher", type=Path, required=True)
     prepare.add_argument("--artifact", type=Path, required=True)
     _release_flags(prepare)
+    renewal = pub.add_parser("prepare-renewal", help="Prepare fresh targets metadata for the same release.")
+    renewal.add_argument("--publisher", type=Path, required=True)
+    renewal.add_argument("--artifact", type=Path, required=True)
+    renewal.add_argument("--app-id", required=True)
+    renewal.add_argument("--platform", default="windows-amd64")
     for name in ("inspect", "approve", "publish"):
         command = pub.add_parser(name)
         command.add_argument("--publisher", type=Path, required=True)
@@ -64,7 +71,7 @@ def parser() -> argparse.ArgumentParser:
     rotate = pub.add_parser("rotate-targets-key")
     rotate.add_argument("--publisher", type=Path, required=True)
     rotate.add_argument("--signer", type=int, required=True)
-    for action in ("info", "recover"):
+    for action in ("info", "recover", "renew-metadata"):
         command = pub.add_parser(action)
         command.add_argument("--publisher", type=Path, required=True)
     maintainer = commands.add_parser("maintainer").add_subparsers(dest="action", required=True)
@@ -91,6 +98,7 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--client", type=Path, required=True)
         if name == "run":
             command.add_argument("arguments", nargs=argparse.REMAINDER)
+    add_launcher_arguments(commands.add_parser("gui-launcher", help="Open or update the installed desktop app."))
     bundle = commands.add_parser("bundle")
     bundle.add_argument("--source", type=Path, required=True)
     bundle.add_argument("--output", type=Path, required=True)
@@ -101,6 +109,9 @@ def parser() -> argparse.ArgumentParser:
     demo = commands.add_parser("demo")
     demo.add_argument("--directory", type=Path)
     demo.add_argument("--summary", action="store_true", help="Print concise results and report paths instead of full JSON.")
+    desktop_demo = commands.add_parser("desktop-demo", help="Run a fresh desktop install, rejection and upgrade workflow.")
+    desktop_demo.add_argument("--directory", type=Path)
+    desktop_demo.add_argument("--show", action="store_true", help="Open the installed desktop app at each stage.")
     report = commands.add_parser("report")
     report.add_argument("--input", type=Path, required=True)
     report.add_argument("--output", type=Path)
@@ -120,6 +131,10 @@ def main(argv: list[str] | None = None) -> int:
                 result = {"bootstrap": str(initialize(args.publisher, args.repository, _passphrase(), maintainer_keys=keys))}
             elif args.action == "prepare":
                 result = {"release_id": prepare_release(args.publisher, args.artifact, _release(args))}
+            elif args.action == "prepare-renewal":
+                result = {"release_id": prepare_targets_renewal(args.publisher, args.artifact, args.app_id, args.platform)}
+            elif args.action == "renew-metadata":
+                result = renew_metadata(args.publisher, _passphrase())
             elif args.action == "inspect":
                 result = inspect_release(args.publisher, args.release)
             elif args.action == "approve":
@@ -160,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
                 return run_installed(args.client.resolve(), arguments)
             else:
                 result = {"active": active_state(args.client)}
+        elif args.command == "gui-launcher":
+            return dispatch_launcher(args)
         elif args.command == "bundle":
             result = {"artifact": str(build_bundle(args.source, args.output, _release(args)))}
         elif args.command == "serve":
@@ -174,6 +191,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise UpdateError("INVALID_INPUT", "HTML output must differ from the JSON evidence file.")
             render_report(json.loads(args.input.read_text(encoding="utf-8")), output, source=args.input)
             result = {"report": str(output.resolve())}
+        elif args.command == "desktop-demo":
+            from verified_updates.desktop_demo import run_desktop_demo
+
+            result = run_desktop_demo(args.directory, args.show)
         elif args.command == "benchmark":
             from verified_updates.benchmark import run_benchmark
 
