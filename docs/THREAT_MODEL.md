@@ -27,7 +27,8 @@ The demo also isolates the release-quorum check using a one-signature targets fi
 - Correctly signed expired fixtures are created by the test setup. The user's system clock is never modified.
 - The process-crash scenario is injected immediately before activation, after the real download, verification, unpacking and self-test. It does not establish power-loss durability or every possible interruption point.
 - A self-test runs authorized application code with the user's normal process privileges. It is a health check, not a sandbox.
-- Source ZIP installation, no automatic version cleanup, and nontransactional publisher state remain known limits. Key rotation for detached repositories and root signer rotation are pending.
+- Publisher recovery assumes intact private journal and staging files. The tests cover process interruption during release publication and local release-key rotation. Newly initialized repositories, power loss and lost private state are outside that evidence.
+- Source ZIP installation and manual version cleanup remain limits. Key rotation for detached repositories, root signer rotation and metadata renewal are pending.
 - The repository HTTP server is a local experiment server, not a hardened public hosting service.
 - A failed post-publication self-test can leave the previous application active while security state records the newer accepted sequence. The publisher should issue a still-higher corrective release.
 - The HTML/JSON experiment report is local diagnostic evidence, not a signed third-party attestation.

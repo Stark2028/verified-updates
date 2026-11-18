@@ -1,5 +1,6 @@
 """TUF publication with private authoritative state and separate approvals."""
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
@@ -17,6 +18,7 @@ from verified_updates.storage import atomic_write, process_lock, read_json, writ
 
 
 ROLES = ("root", "targets", "snapshot", "timestamp")
+PUBLICATION_JOURNAL = "publication-journal.json"
 
 
 def utc_now() -> datetime:
@@ -31,9 +33,11 @@ def authoritative(publisher: Path, role: str) -> Metadata:
     return Metadata.from_file(str(publisher / "state" / f"{role}.json"))
 
 
-def _sign(publisher: Path, metadata: Metadata, role: str, passphrase: bytes, count: int | None = None) -> None:
+def _sign(publisher: Path, metadata: Metadata, role: str, passphrase: bytes, count: int | None = None,
+          *, keyids: list[str] | None = None) -> None:
     metadata.signatures.clear()
-    keyids = configuration(publisher)["keys"][role]
+    if keyids is None:
+        keyids = configuration(publisher)["keys"][role]
     for keyid in keyids[:count]:
         metadata.sign(load_signer(publisher / "keys", keyid, passphrase), append=True)
 
@@ -48,9 +52,7 @@ def _store_publication(publisher: Path, targets: Metadata, snapshot: Metadata, t
         atomic_write(publisher / "state" / f"{role}.json", metadata.to_bytes())
 
 
-def _refresh_publication(publisher: Path, targets: Metadata, passphrase: bytes) -> None:
-    root = authoritative(publisher, "root")
-    root.signed.verify_delegate("targets", targets.signed_bytes, targets.signatures)
+def _build_publication(publisher: Path, targets: Metadata, passphrase: bytes) -> tuple[Metadata, Metadata]:
     snapshot = Metadata(Snapshot(
         version=authoritative(publisher, "snapshot").signed.version + 1,
         expires=utc_now() + timedelta(days=7),
@@ -63,7 +65,87 @@ def _refresh_publication(publisher: Path, targets: Metadata, passphrase: bytes) 
         snapshot_meta=MetaFile.from_data(snapshot.signed.version, snapshot.to_bytes(), ["sha256"]),
     ))
     _sign(publisher, timestamp, "timestamp", passphrase)
-    _store_publication(publisher, targets, snapshot, timestamp)
+    return snapshot, timestamp
+
+
+@contextmanager
+def _publisher_operation(publisher: Path):
+    with process_lock(publisher / ".lock"):
+        if (publisher / PUBLICATION_JOURNAL).exists():
+            raise UpdateError("RECOVERY_REQUIRED", "Run publisher recover to finish the interrupted publication before continuing.")
+        yield
+
+
+def _artifact_bytes(path: Path, target: TargetFile) -> bytes:
+    if target.length > MAX_ARTIFACT_BYTES:
+        raise UpdateError("PACKAGE_TOO_LARGE", "Artifact exceeds the updater's download limit.")
+    with path.open("rb") as stream:
+        artifact = stream.read(target.length + 1)
+    target.verify_length_and_hashes(artifact)
+    return artifact
+
+
+def _complete_publication(publisher: Path, journal: dict) -> None:
+    """Replay already signed bytes while holding the publisher lock."""
+    config = configuration(publisher)
+    repository = Path(config["repository"])
+    metadata = {role: data.encode("utf-8") for role, data in journal["metadata"].items()}
+    targets = Metadata.from_bytes(metadata["targets"])
+    pending_id = journal["pending_release"]
+    if pending_id is not None:
+        pending = _pending(publisher, pending_id)
+        manifest = journal["release_manifest"]
+        target = targets.signed.targets[manifest["target_path"]]
+        artifact = _artifact_bytes(pending / "artifact.zip", target)
+        path = Path(target.path)
+        destination = repository / "targets" / path.parent / f"{target.hashes['sha256']}.{path.name}"
+        atomic_write(destination, artifact)
+
+    # Stage the versioned files clients may request before advancing timestamp.
+    for role in ("targets", "snapshot", "root"):
+        if role in metadata:
+            version = Metadata.from_bytes(metadata[role]).signed.version
+            atomic_write(repository / "metadata" / f"{version}.{role}.json", metadata[role])
+    atomic_write(repository / "metadata" / "timestamp.json", metadata["timestamp"])
+
+    for role, data in metadata.items():
+        atomic_write(publisher / "state" / f"{role}.json", data)
+    if "root" in metadata:
+        config["keys"]["targets"] = journal["targets_keys"]
+        write_json(publisher / "publisher.json", config)
+    if pending_id is not None:
+        write_json(pending / "release.json", {**manifest, "published": True})
+    (publisher / PUBLICATION_JOURNAL).unlink()
+
+
+def _commit_publication(publisher: Path, targets: Metadata, snapshot: Metadata, timestamp: Metadata,
+                        *, pending_id: str | None = None, manifest: dict | None = None,
+                        root: Metadata | None = None, targets_keys: list[str] | None = None) -> None:
+    signed = {"targets": targets, "snapshot": snapshot, "timestamp": timestamp}
+    if root is not None:
+        signed["root"] = root
+    journal = {
+        "schema_version": 1,
+        "metadata": {role: metadata.to_bytes().decode("utf-8") for role, metadata in signed.items()},
+        "pending_release": pending_id,
+        "release_manifest": manifest,
+        "targets_keys": targets_keys,
+    }
+    write_json(publisher / PUBLICATION_JOURNAL, journal)
+    _complete_publication(publisher, journal)
+
+
+def recover_publication(publisher: Path) -> bool:
+    with process_lock(publisher / ".lock"):
+        configuration(publisher)
+        path = publisher / PUBLICATION_JOURNAL
+        if not path.exists():
+            return False
+        journal = read_json(path)
+        if journal.get("schema_version") != 1:
+            raise UpdateError("INVALID_JOURNAL", "Unsupported publisher journal format.")
+        _complete_publication(publisher, journal)
+        return True
 
 
 def initialize(publisher: Path, repository: Path, passphrase: bytes, *, maintainer_keys: list[SSlibKey] | None = None) -> Path:
@@ -130,7 +212,7 @@ def initialize(publisher: Path, repository: Path, passphrase: bytes, *, maintain
 
 def prepare_release(publisher: Path, artifact: Path, release: Release) -> str:
     """Prepare unsigned targets metadata from PRIVATE state, never server data."""
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         if artifact.stat().st_size > MAX_ARTIFACT_BYTES:
             raise UpdateError("PACKAGE_TOO_LARGE", "Artifact exceeds the updater's download limit.")
         targets = authoritative(publisher, "targets")
@@ -174,16 +256,13 @@ def _review_pending(publisher: Path, pending: Path):
     if metadata.signed.is_expired(now) or authoritative(publisher, "root").signed.is_expired(now):
         raise UpdateError("METADATA_EXPIRED", "Renew the expired metadata before publishing this release.")
     target = metadata.signed.targets[manifest["target_path"]]
-    if target.length > MAX_ARTIFACT_BYTES:
-        raise UpdateError("PACKAGE_TOO_LARGE", "Artifact exceeds the updater's download limit.")
-    artifact = (pending / "artifact.zip").read_bytes()
-    target.verify_length_and_hashes(artifact)
-    return manifest, metadata, target, artifact
+    _artifact_bytes(pending / "artifact.zip", target)
+    return manifest, metadata, target
 
 
 def inspect_release(publisher: Path, pending_id: str) -> dict:
-    with process_lock(publisher / ".lock"):
-        _, metadata, target, _ = _review_pending(publisher, _pending(publisher, pending_id))
+    with _publisher_operation(publisher):
+        _, metadata, target = _review_pending(publisher, _pending(publisher, pending_id))
         root = authoritative(publisher, "root").signed
         role = root.roles["targets"]
         verified_signers = []
@@ -201,23 +280,23 @@ def inspect_release(publisher: Path, pending_id: str) -> dict:
 
 
 def export_request(publisher: Path, pending_id: str, output: Path) -> Path:
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         if not configuration(publisher).get("external_targets"):
             raise UpdateError("INVALID_INPUT", "Initialize a repository with external maintainer public keys first.")
         if output.exists():
             raise UpdateError("OUTPUT_EXISTS", "Choose a new path for the signing request.")
-        _, metadata, _, _ = _review_pending(publisher, _pending(publisher, pending_id))
+        _, metadata, _ = _review_pending(publisher, _pending(publisher, pending_id))
         metadata.signatures.clear()
         atomic_write(output, metadata.to_bytes())
         return output.resolve()
 
 
 def import_approval(publisher: Path, pending_id: str, approval: Path) -> int:
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         if not configuration(publisher).get("external_targets"):
             raise UpdateError("INVALID_INPUT", "Detached approvals require external maintainer public keys.")
         pending = _pending(publisher, pending_id)
-        _, metadata, _, _ = _review_pending(publisher, pending)
+        _, metadata, _ = _review_pending(publisher, pending)
         data = read_json(approval)
         if not isinstance(data, dict) or set(data) != {"keyid", "sig"} or any(not isinstance(value, str) for value in data.values()):
             raise UpdateError("INVALID_APPROVAL", "Expected a detached TUF signature with keyid and sig fields.")
@@ -235,11 +314,11 @@ def import_approval(publisher: Path, pending_id: str, approval: Path) -> int:
 
 
 def approve_release(publisher: Path, pending_id: str, signer_number: int, passphrase: bytes) -> int:
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         if signer_number not in (1, 2, 3):
             raise UpdateError("INVALID_INPUT", "Release signer number must be 1, 2, or 3.")
         pending = _pending(publisher, pending_id)
-        _, metadata, _, _ = _review_pending(publisher, pending)
+        _, metadata, _ = _review_pending(publisher, pending)
         config = configuration(publisher)
         if config.get("external_targets"):
             raise UpdateError("EXTERNAL_SIGNER", "Use detached signing and import the maintainer's approval.")
@@ -250,24 +329,19 @@ def approve_release(publisher: Path, pending_id: str, signer_number: int, passph
 
 
 def publish_release(publisher: Path, pending_id: str, passphrase: bytes) -> str:
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         pending = _pending(publisher, pending_id)
-        manifest, metadata, target, artifact = _review_pending(publisher, pending)
+        manifest, metadata, target = _review_pending(publisher, pending)
         # Raises the real TUF UnsignedMetadataError if approvals are insufficient.
         authoritative(publisher, "root").signed.verify_delegate("targets", metadata.signed_bytes, metadata.signatures)
-        repository = Path(configuration(publisher)["repository"])
-        target_path = Path(target.path)
-        public_artifact = repository / "targets" / target_path.parent / f"{target.hashes['sha256']}.{target_path.name}"
-        atomic_write(public_artifact, artifact)
-        _refresh_publication(publisher, metadata, passphrase)
-        manifest["published"] = True
-        write_json(pending / "release.json", manifest)
+        snapshot, timestamp = _build_publication(publisher, metadata, passphrase)
+        _commit_publication(publisher, metadata, snapshot, timestamp, pending_id=pending_id, manifest=manifest)
         return target.path
 
 
 def rotate_targets_key(publisher: Path, signer_number: int, passphrase: bytes) -> str:
     """Authorize a new release key with a new root and republish targets."""
-    with process_lock(publisher / ".lock"):
+    with _publisher_operation(publisher):
         if signer_number not in (1, 2, 3):
             raise UpdateError("INVALID_INPUT", "Release signer number must be 1, 2, or 3.")
         config = configuration(publisher)
@@ -284,16 +358,14 @@ def rotate_targets_key(publisher: Path, signer_number: int, passphrase: bytes) -
         _sign(publisher, root, "root", passphrase, 2)
         old_root.signed.verify_delegate("root", root.signed_bytes, root.signatures)
         root.signed.verify_delegate("root", root.signed_bytes, root.signatures)
-        config["keys"]["targets"][signer_number - 1] = new_signer.public_key.keyid
-        # Root signers are unchanged: their quorum authorizes the targets-key change.
-        write_json(publisher / "publisher.json", config)
-        atomic_write(publisher / "state" / "root.json", root.to_bytes())
-        repository = Path(config["repository"])
-        atomic_write(repository / "metadata" / f"{root.signed.version}.root.json", root.to_bytes())
+        targets_keys = config["keys"]["targets"].copy()
+        targets_keys[signer_number - 1] = new_signer.public_key.keyid
         targets = authoritative(publisher, "targets")
         targets.signed.version += 1
         targets.signed.expires = utc_now() + timedelta(days=30)
-        _sign(publisher, targets, "targets", passphrase, 2)
-        _refresh_publication(publisher, targets, passphrase)
+        _sign(publisher, targets, "targets", passphrase, 2, keyids=targets_keys)
+        root.signed.verify_delegate("targets", targets.signed_bytes, targets.signatures)
+        snapshot, timestamp = _build_publication(publisher, targets, passphrase)
+        _commit_publication(publisher, targets, snapshot, timestamp, root=root, targets_keys=targets_keys)
         return new_signer.public_key.keyid
 

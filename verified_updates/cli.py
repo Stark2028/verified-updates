@@ -16,7 +16,7 @@ from verified_updates.installer import active_state, build_bundle, run_installed
 from verified_updates.keys import generate_maintainer_key, load_public_key
 from verified_updates.publisher import (
     approve_release, configuration, export_request, import_approval, initialize,
-    inspect_release, prepare_release, publish_release, rotate_targets_key,
+    inspect_release, prepare_release, publish_release, recover_publication, rotate_targets_key,
 )
 from verified_updates.server import serve_directory
 
@@ -64,8 +64,9 @@ def parser() -> argparse.ArgumentParser:
     rotate = pub.add_parser("rotate-targets-key")
     rotate.add_argument("--publisher", type=Path, required=True)
     rotate.add_argument("--signer", type=int, required=True)
-    info = pub.add_parser("info")
-    info.add_argument("--publisher", type=Path, required=True)
+    for action in ("info", "recover"):
+        command = pub.add_parser(action)
+        command.add_argument("--publisher", type=Path, required=True)
     maintainer = commands.add_parser("maintainer").add_subparsers(dest="action", required=True)
     keygen = maintainer.add_parser("keygen")
     keygen.add_argument("--key-dir", type=Path, required=True)
@@ -131,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
                 result = {"request": str(export_request(args.publisher, args.release, args.output))}
             elif args.action == "import-approval":
                 result = {"signature_count": import_approval(args.publisher, args.release, args.approval)}
+            elif args.action == "recover":
+                result = {"recovered": recover_publication(args.publisher)}
             else:
                 result = configuration(args.publisher)
         elif args.command == "maintainer":

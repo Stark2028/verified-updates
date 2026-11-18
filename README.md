@@ -103,7 +103,9 @@ For a later reference application build, `verified_updates.reference.reference_b
 
 Read [architecture](docs/ARCHITECTURE.md), [threat model](docs/THREAT_MODEL.md), and [demo guidance](docs/DEMO.md). Authentic initial provisioning, an uncompromised client, retained client state, and a reasonably trustworthy clock are explicit assumptions. Signing keys are separate from public storage, but the local demo simulates all maintainers on one machine.
 
-The installer supports Python source ZIPs with one entrypoint and retains staged and previous versions. Executable packaging, automatic cleanup, publisher crash recovery and deployment hardening remain open. Detached approvals support a single application and platform per repository. The local key rotation command is for the default demo mode.
+If a publisher process stops during publication or local key rotation, run `publisher recover --publisher PATH`. Recovery replays the saved publication without asking for a passphrase or issuing new signatures. Keep the pending artifact available until recovery finishes. See the [publisher recovery workflow](docs/ARCHITECTURE.md#publisher-state-and-ordering).
+
+The installer supports Python source ZIPs with one entrypoint and retains staged and previous versions. Executable packaging, automatic cleanup and deployment hardening remain open. Detached approvals support a single application and platform per repository. The local key rotation command is for the default demo mode.
 
 ## Continue with Claude or another assistant
 

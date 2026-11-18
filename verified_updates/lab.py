@@ -161,10 +161,15 @@ def run_demo(directory: Path | None = None) -> dict:
         artifact = public_artifact(publisher)
         original = artifact.read_bytes()
         tampered = bytearray(original)
-        tampered[len(tampered) // 2] ^= 1
+        changed_offset = len(original) // 2
+        tampered[changed_offset] ^= 1
         atomic_write(artifact, bytes(tampered))
         record("artifact_substitution", main_client, "rejected", "TARGET_INTEGRITY_FAILED", 1, 1)
-        atomic_write(artifact, original)
+        # The fixture changed one byte, so restore it in place between clients.
+        # Windows can deny an atomic rename while the prior HTTP reader closes.
+        with artifact.open("r+b") as stream:
+            stream.seek(changed_offset)
+            stream.write(original[changed_offset:changed_offset + 1])
         record("genuine_release_v2_after_rejection", main_client, "updated", "VERIFIED_AND_INSTALLED", 1, 2)
         atomic_write(repository / "metadata" / "timestamp.json", old_timestamp)
         record("metadata_rollback_after_process_restart", main_client, "rejected", "METADATA_ROLLBACK", 2, 2)

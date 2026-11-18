@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from time import sleep
 from typing import Any, Iterator
 
 from verified_updates.contracts import UpdateError
@@ -19,7 +20,18 @@ def atomic_write(path: Path, data: bytes) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        # On Windows a reader can briefly hold a file without delete sharing.
+        # Retry replacement without ever removing the current file first.
+        for delay in (0.01, 0.02, 0.04, 0.08, 0.16):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError as exc:
+                if os.name != "nt" or getattr(exc, "winerror", None) not in (5, 32):
+                    raise
+                sleep(delay)
+        else:
+            os.replace(temporary, path)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

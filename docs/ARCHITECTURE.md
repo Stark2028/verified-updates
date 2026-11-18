@@ -38,7 +38,15 @@ Publisher configuration, encrypted keys, pending releases and authoritative meta
 
 Targets and root require two distinct signatures from three authorized keys. Snapshot and timestamp have distinct one-key roles. Approving twice with the same key still counts as one signature. The default demo keeps keys in the publisher tree. The detached workflow registers three maintainer public keys and authorizes one app and platform per repository. Maintainers check the actual artifact and exact request digest before signing. The publisher verifies each returned signature against the pending TUF metadata. Root, snapshot and timestamp keys remain with the publisher in both modes. [Detached approvals guide](APPROVALS.md)
 
-Artifacts are published under hash-prefixed filenames. Versioned targets and snapshot metadata are written before the mutable timestamp. Private state is updated after public publication. This ordering fails closed at clients during incomplete publication, but the publisher's multi-file state is not yet a transactional crash-recovery system.
+For release publication and local release-key rotation, the publisher first signs all the required metadata and atomically saves the exact bytes in a private journal. The release artifact is already in private staging. The publisher then checks its digest, writes the hash-prefixed artifact and versioned metadata, and advances the public timestamp. It writes private state and marks the release published before removing the journal.
+
+If the publisher process stops after saving the journal, the next release operation asks the operator to run recovery. Recovery takes the same publisher lock and repeats the writes using the same artifact digest, versions, signatures and expiration dates. It needs no signing key unlock. A successful second invocation reports `recovered: false` because the journal has been cleared. Keep the private staging directory intact until recovery completes.
+
+```powershell
+.\.venv\Scripts\python.exe -m verified_updates publisher recover --publisher .runtime/manual/publisher
+```
+
+The tested guarantee covers process interruption on a local filesystem. It assumes intact journal and staging files. First-time repository initialization, disk loss, power-loss durability and expired metadata renewal require separate handling. A client caught during key rotation can temporarily reject the old publication after seeing the new root and can retry after recovery.
 
 ## Client state and installation
 

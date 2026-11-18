@@ -2,6 +2,15 @@
 
 Last updated: 2026-11-19 (Asia/Calcutta).
 
+## Publisher recovery checkpoint
+
+- Release publication and local targets-key rotation now write a private `publication-journal.json` before changing public metadata. The journal contains the exact signed metadata and the pending release or rotation details. The same publisher lock protects normal publication and recovery.
+- Run `.\.venv\Scripts\python.exe -m verified_updates publisher recover --publisher PATH` after a process interruption. Recovery checks the staged artifact and replays the original publication without the signing passphrases. Normal release operations pause until recovery succeeds. A second recovery returns `recovered: false`.
+- `tests/test_publisher_recovery.py` interrupts a real publisher process before timestamp publication, after timestamp publication, and during local targets-key rotation. It checks the HTTP client's visible release and that publishing can continue afterward.
+- Windows atomic writes retry brief sharing conflicts. A persistent failure still surfaces and leaves the journal available for recovery. The lab restores its single changed fixture byte in place between clients, which resolved an observed Windows rename denial during the CLI demo.
+- `.\.venv\Scripts\python.exe -m pytest -q` passed 33 tests in 42.71s. The final CLI demo passed 11 scenarios and 3 comparisons with `.\.venv\Scripts\python.exe -m verified_updates demo --directory .runtime/publisher-recovery-evidence --summary`. The HTML and JSON in that directory are the latest full demo evidence. Omit the directory flag to create a fresh run.
+- Recovery assumes intact private staging and journal files. First-time initialization, power loss, expired metadata renewal and rotation of externally held keys remain open. Claude's separate desktop launcher plan continues to use the existing ZIP format and client interfaces.
+
 ## Git, performance and detached approvals checkpoint
 
 - The project is a local Git repository on `main`. The baseline commit is `48e90e3`. Git and package authorship are set to Sameer. The local Git email uses the no-reply address for `Stark2028`. Runtime files, caches, the virtual environment and PEM files stay outside Git tracking.
@@ -9,7 +18,7 @@ Last updated: 2026-11-19 (Asia/Calcutta).
 - External targets approval is available through `publisher init --maintainer-key`, `publisher export-request`, `maintainer inspect`, `maintainer sign`, and `publisher import-approval`. Three public keys are enrolled. Two private keys in separate directories with distinct passphrases approved an artifact that the official updater then installed over HTTP. A wrong artifact, an altered request digest and an approval for another release were rejected. Reimporting a signature did not increase the count. This was tested on one machine. See `docs/APPROVALS.md`.
 - `.\.venv\Scripts\python.exe -m pytest -q` passed 30 tests in 35.29s. A separate CLI smoke run generated keys, inspected and signed a request, imported each approval, and confirmed that publication fails with one and succeeds with two. `pip check` found no broken requirements.
 - The existing 11-case demo and three comparisons still pass. The latest full demo is `.runtime/review-detached-baseline/report.html`, generated with `.\.venv\Scripts\python.exe -m verified_updates demo --directory .runtime/review-detached-baseline --summary`. Omit the directory flag for a fresh run.
-- Next presentation work is a portable Windows launcher and a 10–15 minute script. The measurements and approval guide are ready to cite in the report. Publisher crash recovery, detached key rotation and metadata renewal remain open.
+- Next presentation work is the desktop launcher and a 10–15 minute script. The measurements and approval guide are ready to cite in the report. The newer checkpoint above covers publisher crash recovery.
 
 ## Review checkpoint
 
@@ -106,7 +115,7 @@ The original model/earlier source may mention a prototype folder: the new packag
 ## Important implementation limits and review targets
 
 1. **Custody:** the default demo keeps keys in one directory. Detached release approvals support isolated key directories and can be exchanged between machines. Root, snapshot and timestamp keys are still grouped at the publisher.
-2. **Publisher recovery:** publication/targets-key replacement updates multiple files; publication ordering is fail-closed for clients, but there is no transactional publisher recovery journal. Review interrupted initialization/publication/rotation before claiming reliable ongoing publisher operation.
+2. **Publisher recovery:** an interrupted release or local targets-key replacement can be replayed from the private journal. Interrupted first-time initialization and power-loss durability remain outside the verified cases.
 3. **Installer format:** source ZIP + Python interpreter only. No standalone Windows executable, updater self-update, automatic cleanup, disk-full coverage, power-loss guarantee, or complete interruption matrix. Existing process-crash proof covers the commit boundary only.
 4. **Bootstrap/client state:** initial root and client host/state/clock are trusted assumptions. Initial client configuration validation and corrupted-local-state diagnostics can be strengthened. Never fetch an initial key from an untrusted repository and call it authenticated.
 5. **Key lifecycle:** the local demo supports targets-key replacement. External targets rotation, root-signer rotation, and metadata renewal remain open.
@@ -118,7 +127,7 @@ The original model/earlier source may mention a prototype folder: the new packag
 
 1. Run the documented tests and a fresh demo. Read the successful JSON evidence and source before changing contracts.
 2. Perform an independent security review of client/publisher state, approvals, archive handling and key rotation. Add regression tests for concrete discovered issues.
-3. Strengthen publisher initialization, publication and rotation recovery. Preserve the distinct root and release roles.
+3. Review publisher initialization recovery and metadata renewal. Preserve the distinct root and release roles.
 4. Package the reference app and launcher for Windows, then adapt the installer to that explicit bundle format while retaining trusted state outside version payloads. Add the GUI CSV viewer and a real update/restart action.
 5. Build the local operator console on actual existing result contracts. Keep signing keys outside that process; use the offline report's evidence semantics and design tokens as appropriate.
 6. Complete transport and key-lifecycle coverage, and use the recorded benchmark to finish the report and viva script.
