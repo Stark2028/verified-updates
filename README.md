@@ -18,7 +18,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m verified_updates desktop-demo --show
 ```
 
-If `.venv` is already set up, run only the last command. Close each CSV Inspector window to advance. The workflow installs v1, rejects a modified v2 while v1 remains active, restores the genuine v2, and opens the updated app with numeric summaries. Omit `--show` for an automated check through the same launcher. [Desktop workflow](docs/GUI.md)
+If `.venv` is already set up, run only the last command. Click **Check for updates** in each v1 window and show the result in the status line before closing. The first rejects a modified v2 and keeps v1. The second installs genuine v2. The final window shows the new version and its numeric summaries. Omit `--show` for an automated check through the same launcher. [Desktop workflow](docs/GUI.md)
 
 ## Run the demonstration
 

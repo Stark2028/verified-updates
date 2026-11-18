@@ -14,7 +14,13 @@ From the project directory, with the README environment installed, run:
 .\.venv\Scripts\python.exe -m verified_updates desktop-demo --show
 ```
 
-Each run creates a fresh publisher, repository and client. Close the app window to advance from v1 to the rejection check, and again to see v2 with numeric summaries. Omit `--show` to check the same installed-app launch route using its version and feature output. The lab repository is available while the command is running.
+Each run creates a fresh publisher, repository and client. The PowerShell window announces each stage.
+
+1. Show **1.0.0** in the title bar and the sample CSV. Click **Check for updates**. The bottom status line shows `TARGET_INTEGRITY_FAILED` and the title remains at v1. Close the window after showing the result.
+2. The demo restores the genuine bundle and opens v1 again. Click **Check for updates** and show the successful update to **1.1.0**. Close to open the newly installed release.
+3. Show **1.1.0** in the title bar and the **Numeric summaries** panel for the same CSV. This is the new feature in v2.
+
+Closing either v1 window before checking stops the demo with an instruction to retry. Omit `--show` for unattended verification. The lab repository is available while the command is running.
 
 ## First-time install from your own repository
 

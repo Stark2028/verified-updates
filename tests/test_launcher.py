@@ -45,6 +45,43 @@ def _display_available() -> bool:
         return False
 
 
+@pytest.mark.skipif(not _display_available(), reason="No display available for the interactive demo test.")
+def test_interactive_demo_uses_installed_apps_update_button(tmp_path, monkeypatch):
+    import runpy
+    import tkinter as tk
+    from tkinter import ttk
+
+    import verified_updates.desktop_demo as demo
+
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost")
+    stages = []
+
+    def use_window(client, sample, environment):
+        active = read_json(client / "active.json")
+        path = client / "versions" / active["directory"] / "app.py"
+        release = runpy.run_path(path)
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            app = release["Application"](root, client, sample, None)
+            if len(stages) < 2:
+                buttons = [widget for frame in root.winfo_children() for widget in frame.winfo_children()
+                           if isinstance(widget, ttk.Button) and widget.cget("text") == "Check for updates"]
+                button, = buttons
+                button.invoke()
+            stages.append((release["APP_VERSION"], app.status.cget("text"), app.summaries.winfo_manager()))
+        finally:
+            root.destroy()
+
+    monkeypatch.setattr(demo, "_open_window", use_window)
+    result = demo.run_desktop_demo(tmp_path / "interactive", show=True)
+    assert result["rejection"] == "TARGET_INTEGRITY_FAILED"
+    assert stages[0][0] == stages[1][0] == "1.0.0"
+    assert "Update rejected (TARGET_INTEGRITY_FAILED)" in stages[0][1]
+    assert "Updated to 1.1.0" in stages[1][1]
+    assert stages[2][0] == "1.1.0" and stages[2][2] == "pack"
+
+
 def test_gui_app_headless_version_and_export(tmp_path):
     """Sequence-1 bundle has no summaries; a generated sequence-2 module does."""
     builds = tmp_path / "b"
