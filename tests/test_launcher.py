@@ -35,6 +35,23 @@ def _headless_app(path: Path, *args: str) -> dict:
     return json.loads(completed.stdout)
 
 
+def test_operator_controls_real_publication_and_client_checks(tmp_path):
+    run = tmp_path / "operator"
+    commands = ["prepare", "approve 1", "approve 1", "publish", "status", "approve 2", "publish",
+                "change", "check", "restore", "check", "replay", "check", "status", "exit"]
+    completed = subprocess.run(
+        [sys.executable, "-m", "verified_updates", "desktop-demo", "--operator", "--directory", str(run)],
+        input="\n".join(commands) + "\n", cwd=ROOT, capture_output=True, text=True, check=True, timeout=75,
+    )
+    output = completed.stdout
+    assert output.count("Verified approvals 1/2") == 2
+    refusal = output.index("UnsignedMetadataError")
+    assert refusal < output.index("Verified approvals 2/2") < output.index("Publication accepted")
+    assert output.index("TARGET_INTEGRITY_FAILED") < output.index("VERIFIED_AND_INSTALLED") < output.index("METADATA_ROLLBACK")
+    assert "Installed version 1.1.0 (sequence 2)." in output
+    assert (run / "repository" / "metadata" / "timestamp.json").read_bytes() == (run / "publisher" / "state" / "timestamp.json").read_bytes()
+
+
 def _display_available() -> bool:
     try:
         import tkinter as tk

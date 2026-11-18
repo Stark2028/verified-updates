@@ -20,6 +20,8 @@ python -m venv .venv
 
 If `.venv` is already set up, run only the last command. Click **Check for updates** in each v1 window and show the result in the status line before closing. The first rejects a modified v2 and keeps v1. The second installs genuine v2. The final window shows the new version and its numeric summaries. Omit `--show` for an automated check through the same launcher. [Desktop workflow](docs/GUI.md)
 
+For a live walkthrough of the full project, use `desktop-demo --operator`. You control real release creation, approvals, publication, and the client's response to repository changes. [Operator commands](docs/GUI.md#control-the-release-during-a-live-walkthrough)
+
 ## Run the demonstration
 
 From this directory in PowerShell, using Python 3.12+:

@@ -111,7 +111,9 @@ def parser() -> argparse.ArgumentParser:
     demo.add_argument("--summary", action="store_true", help="Print concise results and report paths instead of full JSON.")
     desktop_demo = commands.add_parser("desktop-demo", help="Run a fresh desktop install, rejection and upgrade workflow.")
     desktop_demo.add_argument("--directory", type=Path)
-    desktop_demo.add_argument("--show", action="store_true", help="Open the installed desktop app at each stage.")
+    mode = desktop_demo.add_mutually_exclusive_group()
+    mode.add_argument("--show", action="store_true", help="Open the installed desktop app at each stage.")
+    mode.add_argument("--operator", action="store_true", help="Control publication, repository changes and app launch interactively.")
     report = commands.add_parser("report")
     report.add_argument("--input", type=Path, required=True)
     report.add_argument("--output", type=Path)
@@ -194,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "desktop-demo":
             from verified_updates.desktop_demo import run_desktop_demo
 
-            result = run_desktop_demo(args.directory, args.show)
+            result = run_desktop_demo(args.directory, args.show, args.operator)
         elif args.command == "benchmark":
             from verified_updates.benchmark import run_benchmark
 

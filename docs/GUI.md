@@ -22,6 +22,25 @@ Each run creates a fresh publisher, repository and client. The PowerShell window
 
 Closing either v1 window before checking stops the demo with an instruction to retry. Omit `--show` for unattended verification. The lab repository is available while the command is running.
 
+## Control the release during a live walkthrough
+
+```powershell
+.\.venv\Scripts\python.exe -m verified_updates desktop-demo --operator
+```
+
+The prompt starts with v1 installed and waits for your commands. The release keys are separate identities held by the local demo publisher. The [detached approval workflow](APPROVALS.md) can demonstrate custody on separate machines.
+
+| Enter at `updates>` | What to show |
+| --- | --- |
+| `prepare`, `approve 1`, `publish` | Show the draft's SHA-256 digest and the publication refusal with one approval. Repeat `approve 1` if you want to show that it still counts once. |
+| `approve 2`, `publish` | Two authorized signatures allow publication. |
+| `change`, `open` | Click **Check for updates** in the v1 app. Explain the hash mismatch and show that v1 stays active. Close the app to return to the prompt. |
+| `restore`, `open`, `open` | In the first window, click **Check for updates** and close after the successful update. Open again to see v2's numeric summaries. |
+| `replay`, `check` | Show `METADATA_ROLLBACK`. The original v1 metadata has a valid signature. The client remembers seeing newer metadata. |
+| `restore`, `status`, `exit` | Restore the repository and confirm v2 is still active. |
+
+Use `check` whenever you want the updater's exact diagnostic in PowerShell. The prompt remains open until you exit, so you can pause at each decision and answer questions.
+
 ## First-time install from your own repository
 
 Build the GUI ZIP with `demo_app.bundle_gui.gui_bundle`, publish it with the README publisher workflow, then serve the public repository. Install the published release and inspect the client state:

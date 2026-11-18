@@ -4,6 +4,7 @@ Last updated: 2026-11-19 (Asia/Calcutta).
 
 ## End-to-end desktop and renewal checkpoint
 
+- `python -m verified_updates desktop-demo --operator` starts a fresh v1 client and an interactive PowerShell prompt for real release preparation, two approvals, publication, verification, and replay rejection. `open` starts the installed app. `check` prints exact updater reasons. The local publisher holds the demo release keys. `.\.venv\Scripts\python.exe -m pytest -q tests/test_launcher.py` passed **8 tests in 18.83s**, including the real operator command sequence and the existing Tk button flow. See `docs/GUI.md` for the steps.
 - The user scoped this pass to the working project. Course reports and slides are excluded.
 - `python -m verified_updates gui-launcher` now opens the active installed app through `client run`. Both headless and desktop paths report the installed version. Verification failures keep their exit codes and do not fall back to a checkout viewer.
 - `python -m verified_updates desktop-demo --show` creates a fresh local publisher, repository and client. Click **Check for updates** in both v1 windows. The first rejects the changed v2 ZIP and retains v1. The second installs the genuine release. The last window shows v2's numeric summaries. Close the v1 windows after showing the results. The demo advances only after observing the actual updater event. Omit `--show` for unattended launcher checks.
